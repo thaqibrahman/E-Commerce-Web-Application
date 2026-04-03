@@ -1,25 +1,55 @@
 "use client"
 
-import { useState, useMemo, Suspense } from "react"
+import { useState, useMemo, Suspense, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { Navbar } from "@/components/navbar"
 import { ProductCard } from "@/components/product-card"
 import { ProductFilters } from "@/components/product-filters"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
-import { products } from "@/lib/data"
+import { apiClient } from "@/lib/api"
+import type { Product } from "@/lib/data"
 
 function ProductsContent() {
   const searchParams = useSearchParams()
   const categoryParam = searchParams.get("category") || "All"
 
+  const [products, setProducts] = useState<Product[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState(categoryParam)
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 500])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const data = await apiClient.getProducts()
+        const transformedProducts: Product[] = data.map((item: any) => ({
+          id: item.id || item._id,
+          name: item.name,
+          description: item.description,
+          price: item.price,
+          image: item.image || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop",
+          category: item.category,
+          rating: 4.5,
+          reviewCount: 0,
+          inStock: item.countInStock > 0,
+          featured: false,
+        }))
+        setProducts(transformedProducts)
+      } catch (error) {
+        console.error('Failed to fetch products:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchProducts()
+  }, [])
 
   const maxPrice = useMemo(
-    () => Math.max(...products.map((p) => p.price)),
-    []
+    () => products.length > 0 ? Math.max(...products.map((p) => p.price)) : 500,
+    [products]
   )
 
   const filteredProducts = useMemo(() => {
@@ -37,7 +67,7 @@ function ProductsContent() {
 
       return matchesSearch && matchesCategory && matchesPrice
     })
-  }, [searchQuery, selectedCategory, priceRange])
+  }, [products, searchQuery, selectedCategory, priceRange])
 
   return (
     <div className="min-h-screen flex flex-col">

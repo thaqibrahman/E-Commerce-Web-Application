@@ -10,26 +10,50 @@ import { ProductFilters } from "@/components/product-filters"
 import { ProductGridSkeleton } from "@/components/product-skeleton"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
-import { products, getFeaturedProducts } from "@/lib/data"
+import { apiClient } from "@/lib/api"
+import type { Product } from "@/lib/data"
 
 export default function HomePage() {
+  const [products, setProducts] = useState<Product[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 30000])
   const [isLoading, setIsLoading] = useState(true)
 
-  // Simulate initial loading
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 500)
-    return () => clearTimeout(timer)
+    const fetchProducts = async () => {
+      try {
+        const data = await apiClient.getProducts()
+        // Transform backend data to frontend format
+        const transformedProducts: Product[] = data.map((item: any) => ({
+          id: item.id || item._id,
+          name: item.name,
+          description: item.description,
+          price: item.price,
+          image: item.image || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop",
+          category: item.category,
+          rating: 4.5, // Default rating
+          reviewCount: 0, // Default
+          inStock: item.countInStock > 0,
+          featured: false, // Default
+        }))
+        setProducts(transformedProducts)
+      } catch (error) {
+        console.error('Failed to fetch products:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchProducts()
   }, [])
 
   const maxPrice = useMemo(
-    () => Math.max(...products.map((p) => p.price)),
-    []
+    () => products.length > 0 ? Math.max(...products.map((p) => p.price)) : 30000,
+    [products]
   )
 
-  const featuredProducts = useMemo(() => getFeaturedProducts(), [])
+  const featuredProducts = useMemo(() => products.slice(0, 4), [products])
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
@@ -37,16 +61,16 @@ export default function HomePage() {
         searchQuery === "" ||
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.description.toLowerCase().includes(searchQuery.toLowerCase())
-      
+
       const matchesCategory =
         selectedCategory === "All" || product.category === selectedCategory
-      
+
       const matchesPrice =
         product.price >= priceRange[0] && product.price <= priceRange[1]
 
       return matchesSearch && matchesCategory && matchesPrice
     })
-  }, [searchQuery, selectedCategory, priceRange])
+  }, [products, searchQuery, selectedCategory, priceRange])
 
   return (
     <div className="min-h-screen flex flex-col bg-background">

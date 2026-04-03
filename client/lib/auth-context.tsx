@@ -1,12 +1,13 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
+import { apiClient } from "./api"
 
 interface User {
   id: string
   email: string
   name: string
-  isAdmin?: boolean
+  role: string
 }
 
 interface AuthContextType {
@@ -16,79 +17,78 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>
   register: (name: string, email: string, password: string) => Promise<boolean>
   logout: () => void
+  loading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Demo users for testing
-const demoUsers: Array<User & { password: string }> = [
-  { id: "1", email: "admin@shop.com", name: "Admin User", password: "admin123", isAdmin: true },
-  { id: "2", email: "user@shop.com", name: "John Doe", password: "user123", isAdmin: false },
-]
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      apiClient.getCurrentUser()
+        .then(setUser)
+        .catch(() => {
+          localStorage.removeItem('token')
+        })
+        .finally(() => setLoading(false))
+    } else {
+      setLoading(false)
+    }
+  }, [])
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    
-    const foundUser = demoUsers.find(
-      (u) => u.email === email && u.password === password
-    )
-    
-    if (foundUser) {
-      const { password: _, ...userWithoutPassword } = foundUser
-      setUser(userWithoutPassword)
+    try {
+      const response = await apiClient.login({ email, password })
+      setUser({
+        id: response.id,
+        email: response.email,
+        name: response.name,
+        role: response.role,
+      })
       return true
+    } catch (error) {
+      return false
     }
-    return false
   }, [])
 
   const register = useCallback(async (name: string, email: string, password: string): Promise<boolean> => {
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    
-    // Check if user already exists
-    const existingUser = demoUsers.find((u) => u.email === email)
-    if (existingUser) {
+    try {
+      const response = await apiClient.register({ name, email, password })
+      setUser({
+        id: response.id,
+        email: response.email,
+        name: response.name,
+        role: response.role,
+      })
+      return true
+    } catch (error) {
       return false
     }
-    
-    // Create new user (in real app, this would be an API call)
-    const newUser: User = {
-      id: String(demoUsers.length + 1),
-      email,
-      name,
-      isAdmin: false,
-    }
-    
-    setUser(newUser)
-    return true
   }, [])
 
   const logout = useCallback(() => {
+    localStorage.removeItem('token')
     setUser(null)
   }, [])
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isAdmin: !!user?.isAdmin,
-        login,
-        register,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  )
+  const value = {
+    user,
+    isAuthenticated: !!user,
+    isAdmin: user?.role === 'admin',
+    login,
+    register,
+    logout,
+    loading,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext)
+export function useAuth() {  const context = useContext(AuthContext)
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider")
   }
