@@ -1,9 +1,0 @@
-node_modules/
-.env
-dist/
-build/
-coverage/
-*.log
-
-server/node_modules/
-client/node_modules/
